@@ -1,0 +1,6 @@
+{
+    "name": "DeepDwarf.Editor",
+    "rootNamespace": "DeepDwarf.EditorTools",
+    "references": ["DeepDwarf"],
+    "includePlatforms": ["Editor"]
+}

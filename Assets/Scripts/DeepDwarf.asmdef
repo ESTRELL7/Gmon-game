@@ -1,0 +1,6 @@
+{
+    "name": "DeepDwarf",
+    "rootNamespace": "DeepDwarf",
+    "references": ["UnityEngine.UI"],
+    "autoReferenced": true
+}

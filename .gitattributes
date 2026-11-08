@@ -1,0 +1,12 @@
+* text=auto
+
+*.png binary
+*.wav binary
+*.aseprite binary
+*.ase binary
+
+# Unity YAML: let Unity's Smart Merge handle conflicts if it is set up
+*.unity text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.asset text merge=unityyamlmerge eol=lf
+*.meta text eol=lf
