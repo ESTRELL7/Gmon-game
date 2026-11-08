@@ -13,6 +13,7 @@ namespace DeepDwarf
         public const float ReferenceHeight = 960f;
         public const float HudHeight = 112f;
         public const float ControlsHeight = 236f;
+        public const float HintHeight = 72f;
 
         // Image.pixelsPerUnitMultiplier that draws 9-slice borders 3x bigger than their pixels.
         const float FrameScale = 1.39f;
@@ -36,7 +37,9 @@ namespace DeepDwarf
         CanvasScaler scaler;
         Rect appliedSafeArea;
 
-        PixelLabel depthLabel, moneyLabel, energyLabel, bagLabel, liftLabel, messageLabel;
+        // Touch devices get on-screen buttons, computers play with the keyboard only.
+        bool touchControls;
+        PixelLabel depthLabel, moneyLabel, energyLabel, bagLabel, liftLabel, messageLabel, actionHint;
         Image energyFill, bagFill, liftImage;
         GameObject shopPanel, messageBack;
         PixelLabel shopInfo;
@@ -51,6 +54,7 @@ namespace DeepDwarf
         public HoldButton Left { get; private set; }
         public HoldButton Right { get; private set; }
         public bool ShopOpen => shopPanel.activeSelf;
+        public float BottomHeight => touchControls ? ControlsHeight : HintHeight;
         public RectTransform Root => safeRoot;
 
         public void Init(GameSim sim, Action<string> playSound, Action onMuteToggle)
@@ -76,8 +80,10 @@ namespace DeepDwarf
             safeRoot = Node("SafeArea", canvasObject.transform);
             Stretch(safeRoot);
 
+            touchControls = Application.isMobilePlatform;
             BuildHud();
-            BuildControls();
+            if (touchControls) BuildControls();
+            else BuildKeyHints();
             BuildMessage();
             BuildShop();
             ApplyScreenLayout();
@@ -226,6 +232,23 @@ namespace DeepDwarf
             RefreshMute();
         }
 
+        void BuildKeyHints()
+        {
+            var panel = Frame("KeyHints", safeRoot, "ui_panel");
+            panel.raycastTarget = false;
+            var rt = panel.rectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(0f, HintHeight);
+
+            var keys = Label(rt, "СТРЕЛКИ/WASD: ИДТИ И КОПАТЬ   M: ЗВУК", 2, TextAnchor.MiddleCenter, Cream);
+            Place(keys.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -12f), new Vector2(520f, 20f));
+            actionHint = Label(rt, "", 2, TextAnchor.MiddleCenter, Green);
+            Place(actionHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 12f), new Vector2(520f, 20f));
+        }
+
         HoldButton Arrow(RectTransform parent, Vector2 position, float size, float angle)
         {
             var image = Frame("Arrow", parent, "ui_button");
@@ -296,7 +319,7 @@ namespace DeepDwarf
             var button = close.gameObject.AddComponent<Button>();
             button.targetGraphic = close;
             button.onClick.AddListener(CloseShop);
-            var label = Label(close.rectTransform, "В ШАХТУ!", 3, TextAnchor.MiddleCenter, Cream);
+            var label = Label(close.rectTransform, touchControls ? "В ШАХТУ!" : "В ШАХТУ! (ПРОБЕЛ)", 3, TextAnchor.MiddleCenter, Cream);
             Stretch(label.rectTransform);
 
             shopPanel.SetActive(false);
@@ -363,7 +386,7 @@ namespace DeepDwarf
 
         public void OpenShop(string info)
         {
-            shopInfo.Text = info;
+            shopInfo.Text = info.Length > 0 || touchControls ? info : "КЛАВИШИ 1-" + rows.Count + ": КУПИТЬ";
             shopPanel.SetActive(true);
             messageBack.SetActive(false);
             Refresh();
@@ -398,9 +421,33 @@ namespace DeepDwarf
             floats.Add((label, 0.9f));
         }
 
+        void HandleKeys()
+        {
+            if (ShopOpen)
+            {
+                for (int i = 0; i < rows.Count && i < 9; i++)
+                {
+                    if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)) || Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1 + i)))
+                        OnBuy(rows[i]);
+                }
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)
+                    || Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.E))
+                    CloseShop();
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E)) OnLiftPressed();
+            if (Input.GetKeyDown(KeyCode.M))
+            {
+                onMuteToggle();
+                RefreshMute();
+                ShowMessage(sim.Data.muted ? "ЗВУК ВЫКЛЮЧЕН" : "ЗВУК ВКЛЮЧЁН", 1f);
+            }
+        }
+
         void Update()
         {
             ApplyScreenLayout();
+            HandleKeys();
             Refresh();
 
             if (messageLeft > 0f)
@@ -437,15 +484,15 @@ namespace DeepDwarf
             SetFill(bagFill, sim.BagCount / (float)sim.BagCapacity);
             bagLabel.Text = sim.BagCount + "/" + sim.BagCapacity;
 
-            if (sim.OnSurface)
+            if (touchControls)
             {
-                liftLabel.Text = "ЛАВКА";
-                liftImage.sprite = Art.Sprite("ui_button_green");
+                liftLabel.Text = sim.OnSurface ? "ЛАВКА" : "ПОДЪЁМ\n-" + sim.LiftCost;
+                liftImage.sprite = Art.Sprite(sim.OnSurface || sim.CanLift ? "ui_button_green" : "ui_button_off");
             }
             else
             {
-                liftLabel.Text = "ПОДЪЁМ\n-" + sim.LiftCost;
-                liftImage.sprite = Art.Sprite(sim.CanLift ? "ui_button_green" : "ui_button_off");
+                actionHint.Text = sim.OnSurface ? "ПРОБЕЛ: ЛАВКА" : "ПРОБЕЛ: ПОДЪЁМ НАВЕРХ -" + sim.LiftCost;
+                actionHint.color = sim.OnSurface || sim.CanLift ? Green : Red;
             }
 
             if (!ShopOpen) return;
@@ -453,7 +500,7 @@ namespace DeepDwarf
             {
                 var def = sim.Config.upgrades[row.index];
                 int level = sim.Data.levels[row.index];
-                row.title.Text = def.title + " " + level;
+                row.title.Text = (touchControls ? "" : row.index + 1 + ". ") + def.title + " " + level;
                 bool maxed = sim.IsMaxed(row.index);
                 row.effect.Text = EffectText(def.type, level, maxed);
                 row.price.Text = maxed ? "МАКС" : Art.FormatNumber(sim.UpgradeCost(row.index));
@@ -484,6 +531,7 @@ namespace DeepDwarf
 
         void RefreshMute()
         {
+            if (muteIcon == null) return;
             muteIcon.color = sim.Data.muted ? new Color(1f, 1f, 1f, 0.3f) : Color.white;
         }
 

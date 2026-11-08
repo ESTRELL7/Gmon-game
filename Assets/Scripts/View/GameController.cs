@@ -101,8 +101,6 @@ namespace DeepDwarf
             if (ui.ShopOpen) dx = dy = 0;
             sim.Tick(Mathf.Min(Time.deltaTime, 0.1f), dx, dy);
 
-            if (Input.GetKeyDown(KeyCode.Space) && !ui.ShopOpen && !sim.Lift() && !sim.OnSurface) Play("denied");
-
             autosave += Time.deltaTime;
             if (autosave >= AutosaveInterval) Save();
         }
@@ -117,11 +115,14 @@ namespace DeepDwarf
         void ReadInput(out int dx, out int dy)
         {
             dx = dy = 0;
-            if (ui.Down.Held || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) dy = 1;
-            else if (ui.Left.Held || Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) dx = -1;
-            else if (ui.Right.Held || Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) dx = 1;
-            else if (ui.Up.Held || Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) dy = -1;
+            if (Held(ui.Down) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) dy = 1;
+            else if (Held(ui.Left) || Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) dx = -1;
+            else if (Held(ui.Right) || Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) dx = 1;
+            else if (Held(ui.Up) || Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) dy = -1;
         }
+
+        // On-screen buttons exist only on touch devices.
+        static bool Held(HoldButton button) => button != null && button.Held;
 
         void UpdateCamera(bool snap)
         {
@@ -133,8 +134,8 @@ namespace DeepDwarf
 
             // Keep the dwarf above the middle of the free space between the HUD and the D-pad.
             float canvasHeight = ui.Root.rect.height;
-            float free = canvasHeight - GameUI.HudHeight - GameUI.ControlsHeight;
-            float focus = (GameUI.ControlsHeight + free * 0.62f) / canvasHeight;
+            float free = canvasHeight - GameUI.HudHeight - ui.BottomHeight;
+            float focus = (ui.BottomHeight + free * 0.62f) / canvasHeight;
             Vector3 feet = dwarf != null && !snap ? dwarf.CellPosition : (Vector3)DwarfView.CellToWorld(sim.X, sim.Y);
             float targetY = feet.y + (0.5f - focus) * 2f * size;
 
